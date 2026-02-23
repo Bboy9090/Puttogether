@@ -3,10 +3,636 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Puttogether</title>
+  <title>Puttogether – Card Number Extractor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --surface: #ffffff;
+      --bg: #f1f5f9;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --radius: 12px;
+      --shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 16px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    header {
+      text-align: center;
+      padding: 24px 0 20px;
+    }
+    header h1 { font-size: 1.6rem; font-weight: 700; color: var(--primary); }
+    header p  { font-size: 0.9rem; color: var(--muted); margin-top: 4px; }
+
+    section {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    section h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 14px;
+    }
+
+    /* Source grid */
+    .source-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .source-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 16px 8px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .source-btn:active, .source-btn:hover {
+      border-color: var(--primary);
+      background: #eff6ff;
+      color: var(--primary);
+    }
+    .source-btn .icon { font-size: 1.6rem; }
+
+    /* Paste text area */
+    #paste-section { display: none; }
+    #paste-text {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      resize: vertical;
+      color: var(--text);
+    }
+    #paste-text:focus { outline: 2px solid var(--primary); border-color: transparent; }
+
+    /* Google Docs info */
+    #gdocs-section { display: none; }
+    .gdocs-steps { list-style: none; counter-reset: steps; }
+    .gdocs-steps li {
+      counter-increment: steps;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .gdocs-steps li:last-child { border-bottom: none; }
+    .gdocs-steps li::before {
+      content: counter(steps);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .gdocs-link {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 10px 20px;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .gdocs-link:active { background: var(--primary-dark); }
+
+    /* Action button */
+    .action-btn {
+      width: 100%;
+      margin-top: 12px;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .action-btn:active { background: var(--primary-dark); }
+    .action-btn:disabled { background: var(--muted); cursor: not-allowed; }
+
+    /* Status bar */
+    #status {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      color: var(--primary-dark);
+      margin-bottom: 16px;
+    }
+    #status.error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid #93c5fd;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results */
+    #results-section { display: none; }
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .result-count {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .clear-btn {
+      border: none;
+      background: none;
+      font-size: 0.85rem;
+      color: #ef4444;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .card-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background: #f8fafc;
+    }
+    .card-number {
+      font-family: 'Courier New', monospace;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--text);
+    }
+    .card-type {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .copy-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: var(--primary);
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .copy-btn:active { background: #eff6ff; }
+    .copy-btn.copied { color: #16a34a; border-color: #bbf7d0; background: #f0fdf4; }
+
+    .no-results {
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    /* Drop zone */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 32px 16px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+      transition: border-color 0.15s, background 0.15s;
+      margin-bottom: 10px;
+    }
+    #drop-zone.drag-over {
+      border-color: var(--primary);
+      background: #eff6ff;
+      color: var(--primary);
+    }
+    #drop-zone .drop-icon { font-size: 2.5rem; margin-bottom: 8px; }
+
+    @media (min-width: 480px) {
+      .source-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (min-width: 768px) {
+      body { padding: 24px; max-width: 640px; margin: 0 auto; }
+      header h1 { font-size: 2rem; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Puttogether</h1>
-  <p>Number Extraction App</p>
+  <header>
+    <h1>📇 Puttogether</h1>
+    <p>Extract card numbers from files, photos &amp; text</p>
+  </header>
+
+  <!-- Status bar -->
+  <div id="status" role="status" aria-live="polite">
+    <div class="spinner" id="spinner"></div>
+    <span id="status-text"></span>
+  </div>
+
+  <!-- Upload sources -->
+  <section>
+    <h2>Choose a source</h2>
+
+    <!-- Drag-and-drop zone (desktop + mobile share sheet) -->
+    <div id="drop-zone">
+      <div class="drop-icon">📂</div>
+      <div>Drag &amp; drop a file here</div>
+      <div style="font-size:0.8rem;margin-top:4px;color:#94a3b8">or pick a source below</div>
+    </div>
+
+    <div class="source-grid">
+      <!-- Downloads / Files -->
+      <button class="source-btn" onclick="triggerInput('file-input')">
+        <span class="icon">📁</span>
+        <span>Files &amp;<br>Downloads</span>
+      </button>
+      <input type="file" id="file-input"
+             accept=".txt,.csv,.pdf,.doc,.docx,.xls,.xlsx,.rtf,text/plain,application/pdf"
+             multiple hidden />
+
+      <!-- Photos -->
+      <button class="source-btn" onclick="triggerInput('photo-input')">
+        <span class="icon">🖼️</span>
+        <span>Photos &amp;<br>Gallery</span>
+      </button>
+      <input type="file" id="photo-input" accept="image/*" multiple hidden />
+
+      <!-- Camera -->
+      <button class="source-btn" onclick="triggerInput('camera-input')">
+        <span class="icon">📷</span>
+        <span>Camera</span>
+      </button>
+      <input type="file" id="camera-input" accept="image/*" capture="environment" hidden />
+
+      <!-- Notes / Paste -->
+      <button class="source-btn" onclick="toggleSection('paste-section')">
+        <span class="icon">📝</span>
+        <span>Notes &amp;<br>Paste Text</span>
+      </button>
+
+      <!-- Google Docs -->
+      <button class="source-btn" onclick="toggleSection('gdocs-section')">
+        <span class="icon">📄</span>
+        <span>Google<br>Docs</span>
+      </button>
+
+      <!-- Google Drive upload -->
+      <button class="source-btn" onclick="triggerInput('gdrive-input')">
+        <span class="icon">☁️</span>
+        <span>Google<br>Drive</span>
+      </button>
+      <input type="file" id="gdrive-input"
+             accept=".txt,.csv,.pdf,.doc,.docx,text/plain,application/pdf"
+             multiple hidden />
+    </div>
+  </section>
+
+  <!-- Paste / Notes section -->
+  <section id="paste-section">
+    <h2>📝 Paste text from Notes</h2>
+    <textarea id="paste-text"
+              placeholder="Paste content from your Notes app, clipboard, or any text source…"
+              rows="6"></textarea>
+    <button class="action-btn" onclick="extractFromPaste()">Extract Card Numbers</button>
+  </section>
+
+  <!-- Google Docs instructions -->
+  <section id="gdocs-section">
+    <h2>📄 Use Google Docs</h2>
+    <ol class="gdocs-steps">
+      <li>Open your Google Doc in the browser.</li>
+      <li>Tap <strong>File → Download → Plain Text (.txt)</strong> or <strong>PDF Document</strong>.</li>
+      <li>The file will appear in your <em>Downloads</em> folder.</li>
+      <li>Tap <strong>Files &amp; Downloads</strong> above and select it.</li>
+    </ol>
+    <a class="gdocs-link" href="https://docs.google.com" target="_blank" rel="noopener noreferrer">
+      Open Google Docs ↗
+    </a>
+  </section>
+
+  <!-- Results -->
+  <section id="results-section">
+    <div class="result-header">
+      <h2>Results</h2>
+      <div>
+        <span class="result-count" id="result-count"></span>
+        <button class="clear-btn" onclick="clearResults()">Clear</button>
+      </div>
+    </div>
+    <div id="results-list"></div>
+  </section>
+
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+          crossorigin="anonymous"></script>
+  <!-- Tesseract.js (OCR for images) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"
+          crossorigin="anonymous"></script>
+
+  <script>
+    // ── PDF.js worker ──────────────────────────────────────────────────
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    // ── Card-number patterns ───────────────────────────────────────────
+    // Matches common formats: plain digits, space-separated, hyphen-separated
+    const CARD_PATTERNS = [
+      { re: /\b4\d{3}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b/g,          type: 'Visa' },
+      { re: /\b5[1-5]\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b/g,     type: 'Mastercard' },
+      { re: /\b2[2-7]\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b/g,     type: 'Mastercard (new)' },
+      { re: /\b3[47]\d{2}[\s\-]?\d{6}[\s\-]?\d{5}\b/g,                   type: 'Amex' },
+      { re: /\b6(?:011|5\d{2})[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b/g, type: 'Discover' },
+      { re: /\b3(?:0[0-5]|[68]\d)\d{2}[\s\-]?\d{6}[\s\-]?\d{4}\b/g,     type: 'Diners Club' },
+      { re: /\b(?:2131|1800|35\d{3})[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{3}\b/g, type: 'JCB' },
+      // Generic: formatted XXXX XXXX XXXX XXXX or plain 13-19 consecutive digits (fallback)
+      { re: /\b\d{4}[\s\-]\d{4}[\s\-]\d{4}[\s\-]\d{4}(?:[\s\-]\d{1,3})?\b/g, type: 'Generic' },
+      { re: /\b\d{13,19}\b/g, type: 'Card Number' },
+    ];
+
+    function extractCardNumbers(text) {
+      const found = new Set();
+      const results = [];
+      for (const { re, type } of CARD_PATTERNS) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(text)) !== null) {
+          const raw = m[0];
+          const digits = raw.replace(/[\s\-]/g, '');
+          if (!found.has(digits) && luhnCheck(digits)) {
+            found.add(digits);
+            results.push({ raw, digits, type });
+          }
+        }
+      }
+      return results;
+    }
+
+    // Luhn algorithm to validate potential card numbers
+    function luhnCheck(num) {
+      if (num.length < 13 || num.length > 19) return false;
+      let sum = 0;
+      let alt = false;
+      for (let i = num.length - 1; i >= 0; i--) {
+        let n = parseInt(num[i], 10);
+        if (alt) { n *= 2; if (n > 9) n -= 9; }
+        sum += n;
+        alt = !alt;
+      }
+      return sum % 10 === 0;
+    }
+
+    // Format digits as XXXX XXXX XXXX XXXX
+    function formatCard(digits) {
+      if (digits.length === 15) return digits.replace(/(\d{4})(\d{6})(\d{5})/, '$1 $2 $3');
+      if (digits.length === 14) return digits.replace(/(\d{4})(\d{6})(\d{4})/, '$1 $2 $3');
+      return digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+    }
+
+    // ── UI helpers ────────────────────────────────────────────────────
+    function triggerInput(id) { document.getElementById(id).click(); }
+
+    function toggleSection(id) {
+      const el = document.getElementById(id);
+      const visible = el.style.display === 'block';
+      // Hide both expandable sections first
+      document.getElementById('paste-section').style.display = 'none';
+      document.getElementById('gdocs-section').style.display = 'none';
+      if (!visible) el.style.display = 'block';
+    }
+
+    function setStatus(msg, loading = true, error = false) {
+      const bar = document.getElementById('status');
+      const txt = document.getElementById('status-text');
+      const spinner = document.getElementById('spinner');
+      bar.style.display = 'flex';
+      bar.className = error ? 'error' : '';
+      spinner.style.display = loading ? 'block' : 'none';
+      txt.textContent = msg;
+    }
+
+    function hideStatus() {
+      document.getElementById('status').style.display = 'none';
+    }
+
+    // ── Results rendering ─────────────────────────────────────────────
+    let allResults = [];
+
+    function renderResults(newCards, sourceLabel) {
+      if (!newCards.length) {
+        setStatus(`No card numbers found in "${sourceLabel}".`, false);
+        return;
+      }
+      hideStatus();
+      allResults = allResults.concat(newCards);
+      const section = document.getElementById('results-section');
+      const list = document.getElementById('results-list');
+      const count = document.getElementById('result-count');
+      section.style.display = 'block';
+      count.textContent = `${allResults.length} found`;
+      list.innerHTML = '';
+      allResults.forEach(({ digits, type }, idx) => {
+        const item = document.createElement('div');
+        item.className = 'card-item';
+        const formatted = formatCard(digits);
+        const info = document.createElement('div');
+        info.innerHTML = `<div class="card-number"></div><div class="card-type"></div>`;
+        info.querySelector('.card-number').textContent = formatted;
+        info.querySelector('.card-type').textContent = type;
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.id = `copy-${idx}`;
+        btn.textContent = 'Copy';
+        btn.dataset.card = formatted;
+        btn.addEventListener('click', function () { copyCard(this, this.dataset.card); });
+        item.appendChild(info);
+        item.appendChild(btn);
+        list.appendChild(item);
+      });
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function clearResults() {
+      allResults = [];
+      document.getElementById('results-section').style.display = 'none';
+      document.getElementById('results-list').innerHTML = '';
+    }
+
+    async function copyCard(btn, text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = '✓ Copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+      } catch {
+        // Fallback for older mobile browsers
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.textContent = '✓ Copied'; btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+      }
+    }
+
+    // ── Text extraction ───────────────────────────────────────────────
+    function extractFromText(text, label) {
+      const cards = extractCardNumbers(text);
+      renderResults(cards, label);
+    }
+
+    function extractFromPaste() {
+      const text = document.getElementById('paste-text').value.trim();
+      if (!text) { setStatus('Please paste some text first.', false, true); return; }
+      extractFromText(text, 'pasted text');
+    }
+
+    // ── PDF extraction ────────────────────────────────────────────────
+    async function extractFromPDF(file) {
+      if (typeof pdfjsLib === 'undefined') {
+        throw new Error('PDF library not loaded. Please check your connection.');
+      }
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        fullText += content.items.map(item => item.str).join(' ') + '\n';
+      }
+      return fullText;
+    }
+
+    // ── Image OCR ────────────────────────────────────────────────────
+    async function extractFromImage(file) {
+      if (typeof Tesseract === 'undefined') {
+        throw new Error('OCR library not loaded. Please check your connection.');
+      }
+      setStatus(`Running OCR on "${file.name}"…`);
+      const result = await Tesseract.recognize(file, 'eng', {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            setStatus(`OCR progress: ${Math.round(m.progress * 100)}%`);
+          }
+        }
+      });
+      return result.data.text;
+    }
+
+    // ── File reading ──────────────────────────────────────────────────
+    function readAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsText(file);
+      });
+    }
+
+    async function processFile(file) {
+      const name = file.name || 'unknown';
+      const type = file.type || '';
+      setStatus(`Processing "${name}"…`);
+      try {
+        let text = '';
+        if (type === 'application/pdf' || name.endsWith('.pdf')) {
+          text = await extractFromPDF(file);
+        } else if (type.startsWith('image/')) {
+          text = await extractFromImage(file);
+        } else {
+          // Try plain text for .txt, .csv, .doc text content, etc.
+          text = await readAsText(file);
+        }
+        const cards = extractCardNumbers(text);
+        renderResults(cards, name);
+      } catch (err) {
+        setStatus(`Error processing "${name}": ${err.message}`, false, true);
+      }
+    }
+
+    async function handleFiles(fileList) {
+      const files = Array.from(fileList);
+      if (!files.length) return;
+      for (const file of files) {
+        await processFile(file);
+      }
+    }
+
+    // ── Wire up file inputs ───────────────────────────────────────────
+    ['file-input', 'photo-input', 'camera-input', 'gdrive-input'].forEach(id => {
+      document.getElementById(id).addEventListener('change', function () {
+        if (this.files.length) handleFiles(this.files);
+        this.value = ''; // reset so same file can be re-selected
+      });
+    });
+
+    // ── Drag-and-drop ─────────────────────────────────────────────────
+    const dropZone = document.getElementById('drop-zone');
+
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+    });
+    // Tap on drop zone opens file picker
+    dropZone.addEventListener('click', () => triggerInput('file-input'));
+  </script>
 </body>
 </html>
